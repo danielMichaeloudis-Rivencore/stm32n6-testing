@@ -104,26 +104,26 @@ fn configure_dma_noncacheable(mpu: &mut MPU, base: u32, len: usize) {
 }
 
 fn config_risaf(start: u32, end: u32) {
-    const AXISRAM1: u32 = 0x34064000;
-    let start = start - AXISRAM1;
-    let end = end - AXISRAM1;
-    let risaf = RISAF2;
-    info!("RISAF: {:#010x}", risaf.cr().read().0);
-    info!("RISAF 1 start: {:#010x}", risaf.reg_startr(0).read().0);
-    info!("RISAF 1 end: {:#010x}", risaf.reg_endr(0).read().0);
+    // const AXISRAM1: u32 = 0x34064000;
+    // let start = start - AXISRAM1;
+    // let end = end - AXISRAM1;
+    // let risaf = RISAF2;
+    // info!("RISAF: {:#010x}", risaf.cr().read().0);
+    // info!("RISAF 1 start: {:#010x}", risaf.reg_startr(0).read().0);
+    // info!("RISAF 1 end: {:#010x}", risaf.reg_endr(0).read().0);
 
-    risaf.reg_startr(0).write(|w| w.set_baddstart(start));
-    risaf.reg_endr(0).write(|w| w.set_baddend(end));
-    risaf.reg_cidcfgr(0).write(|w| {
-        w.0 = 0x00FF00FF;
-        // w.set_rdenc(0, true);
-        // w.set_wrenc(0, true);
-    });
-    risaf.reg_cfgr(0).write(|w| {
-        w.set_bren(true);
-        w.set_sec(true);
-    });
-    risaf.cr().write(|w| w.set_glock(true));
+    // risaf.reg_startr(0).write(|w| w.set_baddstart(start));
+    // risaf.reg_endr(0).write(|w| w.set_baddend(end));
+    // risaf.reg_cidcfgr(0).write(|w| {
+    //     w.0 = 0x00FF00FF;
+    //     // w.set_rdenc(0, true);
+    //     // w.set_wrenc(0, true);
+    // });
+    // risaf.reg_cfgr(0).write(|w| {
+    //     w.set_bren(true);
+    //     w.set_sec(true);
+    // });
+    // risaf.cr().write(|w| w.set_glock(true));
 
     let rifsc = RIFSC;
     rifsc.risc_privcfgr(1).write(|w| w.set_cfg(28, true));
@@ -133,9 +133,9 @@ fn config_risaf(start: u32, end: u32) {
         w.set_msec(true);
         w.set_mcid(0b01);
     });
-    info!("RISAF: {:#010x}", risaf.cr().read().0);
-    info!("RISAF 1 start: {:#010x}", risaf.reg_startr(0).read().0);
-    info!("RISAF 1 end: {:#010x}", risaf.reg_endr(0).read().0);
+    // info!("RISAF: {:#010x}", risaf.cr().read().0);
+    // info!("RISAF 1 start: {:#010x}", risaf.reg_startr(0).read().0);
+    // info!("RISAF 1 end: {:#010x}", risaf.reg_endr(0).read().0);
 }
 #[embassy_executor::main]
 async fn main(spawner: Spawner) {
@@ -163,7 +163,7 @@ async fn main(spawner: Spawner) {
 
     let mac_addr = [0x00, 0x00, 0xDE, 0xCA, 0xFF, 0xEE];
 
-    let device = Ethernet::new_rmii(
+    let device = Ethernet::new(
         &mut packets.0,
         p.ETH1,
         Irqs,
