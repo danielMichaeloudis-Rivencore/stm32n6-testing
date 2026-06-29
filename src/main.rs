@@ -1,6 +1,5 @@
 #![no_std]
 #![no_main]
-
 use core::net::SocketAddrV4;
 
 use cortex_m::peripheral::MPU;
@@ -86,45 +85,24 @@ fn configure_dma_noncacheable(mpu: &mut MPU, base: u32, len: usize) {
         cortex_m::asm::dsb();
         cortex_m::asm::isb();
 
-        // // Attribute index 0 = Normal, non-cacheable.
-        // let mair0 = mpu.mair[0].read();
-        // mpu.mair[0].write((mair0 & !0xFF) | MAIR_NORMAL_NC);
+        // Attribute index 0 = Normal, non-cacheable.
+        let mair0 = mpu.mair[0].read();
+        mpu.mair[0].write((mair0 & !0xFF) | MAIR_NORMAL_NC);
 
-        // mpu.rnr.write(0);
-        // // RBAR: BASE[31:5] | SH=00 (non-shareable) | AP=01 (RW, any privilege) | XN=1.
-        // mpu.rbar.write((base & !0x1F) | (0b01 << 1) | 1);
-        // // RLAR: LIMIT[31:5] | AttrIndx=0 | EN=1.
-        // mpu.rlar.write((limit & !0x1F) | 1);
+        mpu.rnr.write(0);
+        // RBAR: BASE[31:5] | SH=00 (non-shareable) | AP=01 (RW, any privilege) | XN=1.
+        mpu.rbar.write((base & !0x1F) | (0b01 << 1) | 1);
+        // RLAR: LIMIT[31:5] | AttrIndx=0 | EN=1.
+        mpu.rlar.write((limit & !0x1F) | 1);
 
-        // // Enable MPU, keep the architectural default map as background.
-        // mpu.ctrl.write((1 << 2) | (1 << 0)); // PRIVDEFENA | ENABLE
-        // cortex_m::asm::dsb();
-        // cortex_m::asm::isb();
+        // Enable MPU, keep the architectural default map as background.
+        mpu.ctrl.write((1 << 2) | (1 << 0)); // PRIVDEFENA | ENABLE
+        cortex_m::asm::dsb();
+        cortex_m::asm::isb();
     }
 }
 
-fn config_risaf(start: u32, end: u32) {
-    // const AXISRAM1: u32 = 0x34064000;
-    // let start = start - AXISRAM1;
-    // let end = end - AXISRAM1;
-    // let risaf = RISAF2;
-    // info!("RISAF: {:#010x}", risaf.cr().read().0);
-    // info!("RISAF 1 start: {:#010x}", risaf.reg_startr(0).read().0);
-    // info!("RISAF 1 end: {:#010x}", risaf.reg_endr(0).read().0);
-
-    // risaf.reg_startr(0).write(|w| w.set_baddstart(start));
-    // risaf.reg_endr(0).write(|w| w.set_baddend(end));
-    // risaf.reg_cidcfgr(0).write(|w| {
-    //     w.0 = 0x00FF00FF;
-    //     // w.set_rdenc(0, true);
-    //     // w.set_wrenc(0, true);
-    // });
-    // risaf.reg_cfgr(0).write(|w| {
-    //     w.set_bren(true);
-    //     w.set_sec(true);
-    // });
-    // risaf.cr().write(|w| w.set_glock(true));
-
+fn config_rifsc() {
     let rifsc = RIFSC;
     rifsc.risc_privcfgr(1).write(|w| w.set_cfg(28, true));
     rifsc.risc_seccfgr(1).write(|w| w.set_cfg(28, true));
@@ -133,18 +111,16 @@ fn config_risaf(start: u32, end: u32) {
         w.set_msec(true);
         w.set_mcid(0b01);
     });
-    // info!("RISAF: {:#010x}", risaf.cr().read().0);
-    // info!("RISAF 1 start: {:#010x}", risaf.reg_startr(0).read().0);
-    // info!("RISAF 1 end: {:#010x}", risaf.reg_endr(0).read().0);
 }
+
 #[embassy_executor::main]
 async fn main(spawner: Spawner) {
     let mut core_peri = unsafe { cortex_m::Peripherals::steal() };
     core_peri.SCB.invalidate_icache();
     core_peri.SCB.enable_icache();
 
-    static PACKETS: StaticCell<Aligned<PacketQueue<100, 100>>> = StaticCell::new();
-    let packets = PACKETS.init(Aligned(PacketQueue::<100, 100>::new()));
+    static PACKETS: StaticCell<Aligned<PacketQueue<8, 8>>> = StaticCell::new();
+    let packets = PACKETS.init(Aligned(PacketQueue::<8, 8>::new()));
     let packet_addr = packets as *const _ as u32;
     info!("Packets Address: {:#010x}", packet_addr);
     configure_dma_noncacheable(
@@ -154,10 +130,7 @@ async fn main(spawner: Spawner) {
     );
     core_peri.SCB.enable_dcache(&mut core_peri.CPUID);
 
-    config_risaf(
-        packet_addr,
-        packet_addr + core::mem::size_of_val(packets) as u32,
-    );
+    config_rifsc();
 
     let p = embassy_stm32::init(rcc_config());
 
@@ -218,7 +191,24 @@ async fn main(spawner: Spawner) {
         t.next().await;
         let e = SocketAddrV4::new(Ipv4Address::BROADCAST, 8000);
         let r = socket.send_to(b"dataaaaaaaaaa", e).await;
-        //println!("Send? {:?}", r);
+        println!("Send? {:?}", r);
+        let eth = embassy_stm32::pac::ETH1;
+        let mac = eth.ethernet_mac();
+        info!("MMCTGFSCCR: {:#010x}", mac.mmc_control().read().0);
+        info!("MACRXTXSR: {:#010x}", mac.mac_rx_tx_sr().read().0);
+        info!("MACPCSR: {:#010x}", mac.macpcsr().read().0);
+        info!("MACLCSR: {:#010x}", mac.maclcsr().read().0);
+        info!("MACPHYCSR: {:#010x}", mac.macphycsr().read().0);
+        info!("MACDR: {:#010x}", mac.macdr().read().0);
+        info!("MACCR: {:#010x}", mac.maccr().read().0);
+        info!("MACHWF0R: {:#010x}", mac.machwf0r().read().0);
+        info!("MACHWF1R: {:#010x}", mac.machwf1r().read().0);
+        info!("MACHWF2R: {:#010x}", mac.machwf2r().read().0);
+        info!("MACHWF3R: {:#010x}", mac.machwf3r().read().0);
+        info!(
+            "Tx packet count good: {:#010x}",
+            mac.tx_packet_count_good().read().0
+        );
         // Generous idle timeout so a stalled peer can't wedge us forever.
         // socket.set_timeout(Some(Duration::from_secs(20)));
         // let e = socket.write(b"dataaaaaaaaaaaaa").await;
